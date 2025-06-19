@@ -6,6 +6,7 @@ from typing import List
 import asyncio
 import nest_asyncio
 import os
+import json
 
 nest_asyncio.apply()
 
@@ -22,7 +23,7 @@ class MCP_ChatBot:
             api_key=os.getenv("OPENROUTER_API_KEY"),
         )
         self.available_tools: List[dict] = []
-        self.model = "google/gemini-2.5-flash-lite-preview-06-17"
+        self.model = "openai/gpt-4o-mini"
 
     async def process_query(self, query):
         messages = [{'role':'user', 'content':query}]
@@ -51,7 +52,7 @@ class MCP_ChatBot:
                 
                 for tool_call in assistant_message.tool_calls:
                     tool_name = tool_call.function.name
-                    tool_args = eval(tool_call.function.arguments)  # Parse JSON string to dict
+                    tool_args = json.loads(tool_call.function.arguments)
                     tool_id = tool_call.id
                     
                     print(f"Calling tool {tool_name} with args {tool_args}")
