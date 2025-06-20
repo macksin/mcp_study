@@ -29,6 +29,10 @@ class MCP_ChatBot:
         self.model = "openai/gpt-4o-mini"
         self.available_tools: List[ToolDefinition] = []
         self.tool_to_session: Dict[str, ClientSession] = {}
+        # Multi-turn conversation state
+        self.conversation_history: List[dict] = []
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
 
     async def connect_to_server(self, server_name: str, server_config: dict) -> None:
         """Connect to a single MCP server."""
@@ -80,8 +84,30 @@ class MCP_ChatBot:
             print(f"Error loading server configuration: {e}")
             raise
     
+    def format_tokens(self, count: int) -> str:
+        """Format token count with nice indicators"""
+        if count >= 1000:
+            return f"{count/1000:.1f}k"
+        return str(count)
+    
+    def print_token_usage(self, input_tokens: int, output_tokens: int):
+        """Print token usage with nice formatting"""
+        self.total_input_tokens += input_tokens
+        self.total_output_tokens += output_tokens
+        
+        input_str = self.format_tokens(input_tokens)
+        output_str = self.format_tokens(output_tokens)
+        total_input_str = self.format_tokens(self.total_input_tokens)
+        total_output_str = self.format_tokens(self.total_output_tokens)
+        
+        print(f"🔢 Tokens: {input_str}/{output_str} (Total: {total_input_str}/{total_output_str})")
+
     async def process_query(self, query):
-        messages = [{'role':'user', 'content':query}]
+        # Add user message to conversation history
+        self.conversation_history.append({'role': 'user', 'content': query})
+        
+        # Use full conversation history for context
+        messages = self.conversation_history.copy()
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
@@ -89,12 +115,18 @@ class MCP_ChatBot:
             max_tokens=2024
         )
         
+        # Track token usage
+        if hasattr(response, 'usage') and response.usage:
+            self.print_token_usage(response.usage.prompt_tokens, response.usage.completion_tokens)
+        
+        assistant_response_content = None
         process_query = True
         while process_query:
             assistant_message = response.choices[0].message
             
             if assistant_message.content:
                 print(assistant_message.content)
+                assistant_response_content = assistant_message.content
                 if not assistant_message.tool_calls:
                     process_query = False
             
@@ -129,31 +161,56 @@ class MCP_ChatBot:
                     max_tokens=2024
                 )
                 
+                # Track token usage for follow-up calls
+                if hasattr(response, 'usage') and response.usage:
+                    self.print_token_usage(response.usage.prompt_tokens, response.usage.completion_tokens)
+                
                 if response.choices[0].message.content and not response.choices[0].message.tool_calls:
+                    assistant_response_content = response.choices[0].message.content
                     print(response.choices[0].message.content)
                     process_query = False
+        
+        # Add assistant response to conversation history
+        if assistant_response_content:
+            self.conversation_history.append({'role': 'assistant', 'content': assistant_response_content})
 
     async def chat_loop(self):
         """Run an interactive chat loop"""
-        print(f"\nMulti-Server MCP Chatbot Started! Using model: {self.model}")
-        print("Available capabilities:")
+        print(f"\n🤖 Multi-Server MCP Chatbot Started! Using model: {self.model}")
+        print("✨ Features: Multi-turn conversation + Token tracking")
+        print("\nAvailable capabilities:")
         print("  🔬 Research: ArXiv paper search and analysis")
         print("  📁 Filesystem: File operations and management")
         print("  🌐 Fetch: Web content retrieval")
-        print("\nType your queries or 'quit' to exit.")
+        print("\n💡 Special commands:")
+        print("  'clear' - Clear conversation history")
+        print("  'history' - Show conversation history")
+        print("  'quit' - Exit chatbot")
+        print("\nType your queries to start chatting...")
         
         while True:
             try:
-                query = input("\nQuery: ").strip()
+                query = input(f"\n[Turn {len(self.conversation_history)//2 + 1}] Query: ").strip()
         
                 if query.lower() == 'quit':
                     break
+                elif query.lower() == 'clear':
+                    self.conversation_history = []
+                    self.total_input_tokens = 0
+                    self.total_output_tokens = 0
+                    print("🧹 Conversation history and token counts cleared!")
+                    continue
+                elif query.lower() == 'history':
+                    print(f"\n📜 Conversation History ({len(self.conversation_history)} messages):")
+                    for i, msg in enumerate(self.conversation_history):
+                        role_emoji = "🧑" if msg['role'] == 'user' else "🤖"
+                        print(f"  {i+1}. {role_emoji} {msg['role']}: {msg['content'][:100]}{'...' if len(msg['content']) > 100 else ''}")
+                    continue
                     
                 await self.process_query(query)
-                print("\n")
                     
             except Exception as e:
-                print(f"\nError: {str(e)}")
+                print(f"\n❌ Error: {str(e)}")
     
     async def cleanup(self):
         """Cleanly close all resources using AsyncExitStack."""
