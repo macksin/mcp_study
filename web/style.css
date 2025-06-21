@@ -470,6 +470,59 @@ body::before {
     }
 }
 
+/* Tool progress indicator */
+.tool-progress {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 5px;
+    border-left: 4px solid #ff6600;
+    background: rgba(255, 102, 0, 0.1);
+    max-width: 100%;
+    width: 100%;
+    min-height: auto;
+    height: auto;
+    overflow: visible;
+    display: block;
+    animation: pulse-orange 2s infinite;
+}
+
+@keyframes pulse-orange {
+    0%, 100% { 
+        background: rgba(255, 102, 0, 0.1);
+        border-left-color: #ff6600;
+    }
+    50% { 
+        background: rgba(255, 102, 0, 0.2);
+        border-left-color: #ffaa00;
+    }
+}
+
+.tool-progress-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tool-spinner {
+    font-size: 1.5em;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.tool-message {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.tool-dots {
+    color: #ff6600;
+    font-weight: bold;
+}
+
 /* Loading animation */
 .loading {
     display: inline-block;

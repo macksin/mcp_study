@@ -124,6 +124,20 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Check if this is token information
                         if "🔢 Tokens:" in line:
                             token_info = line
+                            # Use original_print to avoid recursion
+                            original_print(f"🔍 Captured token info: {token_info}")
+                        # Check if this is a tool call
+                        elif "Calling tool" in line and "with args" in line:
+                            # Store tool info for later sending
+                            asyncio.create_task(websocket.send_text(json.dumps({
+                                "type": "tool_progress",
+                                "message": line
+                            })))
+                            # Add to current message
+                            if current_message:
+                                current_message += "\n" + line
+                            else:
+                                current_message = line
                         else:
                             # Add to current message
                             if current_message:

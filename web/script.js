@@ -28,6 +28,9 @@ class MCPChatInterface {
         this.charCount = document.getElementById('char-count');
         this.lastUpdated = document.getElementById('last-updated');
         this.tokenCount = document.getElementById('token-count');
+        
+        // Tool progress tracking
+        this.toolProgressDiv = null;
     }
     
     setupEventListeners() {
@@ -122,14 +125,24 @@ class MCPChatInterface {
                 this.addMessage('user', data.message);
                 break;
             case 'assistant_message':
-                this.addMessage('assistant', data.message);
-                
-                // Handle token information if present
-                if (data.tokens) {
-                    this.parseTokenInfo(data.tokens);
+                // Remove tool progress indicator when response arrives
+                if (this.toolProgressDiv) {
+                    this.toolProgressDiv.remove();
+                    this.toolProgressDiv = null;
                 }
                 
+                // Combine message and token info if present
+                let fullMessage = data.message;
+                if (data.tokens) {
+                    fullMessage += '\n\n' + data.tokens;
+                }
+                
+                this.addMessage('assistant', fullMessage);
                 this.playSound('message');
+                break;
+            case 'tool_progress':
+                this.showToolProgress(data.message);
+                this.playSound('send');
                 break;
             case 'error':
                 this.addMessage('error', data.message);
@@ -239,6 +252,42 @@ class MCPChatInterface {
         }
     }
     
+    showToolProgress(toolMessage) {
+        // Remove existing tool progress if any
+        if (this.toolProgressDiv) {
+            this.toolProgressDiv.remove();
+        }
+        
+        // Create new tool progress indicator
+        this.toolProgressDiv = document.createElement('div');
+        this.toolProgressDiv.className = 'tool-progress';
+        
+        const timestamp = new Date().toLocaleTimeString();
+        
+        this.toolProgressDiv.innerHTML = `
+            <div class="message-header">🔧 TOOL EXECUTION</div>
+            <div class="tool-progress-content">
+                <div class="tool-spinner">⚙️</div>
+                <div class="tool-message">${this.formatToolProgress(toolMessage)}</div>
+                <div class="tool-dots"><span class="loading"></span></div>
+            </div>
+            <div class="message-timestamp">${timestamp}</div>
+        `;
+        
+        this.chatMessages.appendChild(this.toolProgressDiv);
+        this.scrollToBottom();
+    }
+    
+    formatToolProgress(message) {
+        // Extract tool name and args from message
+        const toolMatch = message.match(/Calling tool (\w+) with args (.+)/);
+        if (toolMatch) {
+            const [, toolName, args] = toolMatch;
+            return `<strong style="color: #ffff00;">${toolName}</strong><br><span style="color: #888; font-size: 0.9em;">${args}</span>`;
+        }
+        return message;
+    }
+    
     getMessageHeader(type) {
         const headers = {
             'user': '👤 USER',
@@ -271,8 +320,11 @@ class MCPChatInterface {
             '📁 <strong style="color: #00ff41;">$1</strong>'
         );
         
-        // Remove any token info from message display (handled separately)
-        formatted = formatted.replace(/🔢 Tokens:.*?\)/g, '');
+        // Style token information nicely
+        formatted = formatted.replace(
+            /🔢 Tokens: (\d+)\/(\d+) \(Total: (\d+)\/(\d+)\)/g,
+            '<div style="margin-top: 15px; padding: 8px; background: rgba(255, 255, 0, 0.1); border: 1px solid #ffff00; border-radius: 5px; font-size: 0.9em; text-align: center;"><strong style="color: #ffff00;">🔢 Tokens:</strong> <span style="color: #00ff41;">$1</span>/<span style="color: #00aaff;">$2</span> | <strong style="color: #ffff00;">Total:</strong> <span style="color: #00ff41;">$3</span>/<span style="color: #00aaff;">$4</span></div>'
+        );
         
         return formatted;
     }
@@ -345,14 +397,6 @@ class MCPChatInterface {
         this.tokenCount.title = `Input: ${inputTokens} tokens, Output: ${outputTokens} tokens`;
     }
     
-    parseTokenInfo(tokenString) {
-        // Parse token information from format: "🔢 Tokens: 17/33 (Total: 17/33)"
-        const tokenMatch = tokenString.match(/🔢 Tokens: (\d+)\/(\d+) \(Total: (\d+)\/(\d+)\)/);
-        if (tokenMatch) {
-            const [, , , totalInput, totalOutput] = tokenMatch;
-            this.updateTokenCount(totalInput, totalOutput);
-        }
-    }
     
     scrollToBottom() {
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
