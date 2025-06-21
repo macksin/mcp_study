@@ -1,6 +1,6 @@
 from typing import Dict, Type
-from .llm_adapter import LLMAdapter
-from .openai_adapter import OpenAIAdapter, OpenRouterAdapter
+from llm_adapter import LLMAdapter
+from openai_adapter import OpenAIAdapter, OpenRouterAdapter
 
 
 class LLMFactory:
@@ -36,21 +36,44 @@ LLM_CONFIGS = {
     "gpt4o": {
         "provider": "openrouter",
         "model": "openai/gpt-4o",
+        "enable_caching": True,
+        "cache_system_messages": True,
     },
     "gpt4o-mini": {
         "provider": "openrouter", 
         "model": "openai/gpt-4o-mini",
+        "enable_caching": True,
+        "cache_system_messages": True,
+    },
+    "gpt4.1-mini": {
+        "provider": "openrouter",
+        "model": "openai/gpt-4.1-mini", 
+        "enable_caching": True,
+        "cache_system_messages": True,
     },
     "claude-sonnet": {
         "provider": "openrouter",
         "model": "anthropic/claude-3-sonnet",
+        "enable_caching": True,
+        "cache_system_messages": True,
     },
     "claude-haiku": {
         "provider": "openrouter",
         "model": "anthropic/claude-3-haiku", 
+        "enable_caching": True,
+        "cache_system_messages": True,
     },
     "llama-70b": {
         "provider": "openrouter",
         "model": "meta-llama/llama-3-70b-instruct",
+        "enable_caching": False,  # DeepSeek has automatic caching, Llama may not support it
+        "cache_system_messages": False,
+    },
+    # Caching-optimized configs
+    "claude-sonnet-cached": {
+        "provider": "openrouter",
+        "model": "anthropic/claude-3-sonnet",
+        "enable_caching": True,
+        "cache_system_messages": True,
     }
 }

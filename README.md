@@ -7,6 +7,7 @@ A comprehensive study and implementation of Model Context Protocol (MCP) servers
 This project demonstrates the power of MCP by building:
 - **ArXiv Research Server** - Search and analyze academic papers
 - **Multi-Server Chatbot** - Intelligent assistant with multiple capabilities
+- **Flexible LLM Adapter** - Easy switching between AI providers (OpenAI, Claude, Llama, etc.)
 - **OpenRouter Integration** - Cost-effective LLM integration
 
 ## 📁 Project Structure

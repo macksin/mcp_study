@@ -6,8 +6,11 @@ import asyncio
 import nest_asyncio
 import os
 import json
-from .llm_adapter import LLMAdapter, ChatMessage
-from .openai_adapter import OpenRouterAdapter
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from llm_adapter import LLMAdapter, ChatMessage
+from openai_adapter import OpenRouterAdapter
 
 nest_asyncio.apply()
 
@@ -28,7 +31,17 @@ class MCP_ChatBot:
         self.available_tools: List[dict] = []
 
     async def process_query(self, query):
-        messages = [ChatMessage(role='user', content=query)]
+        # Create system message with tool information (cacheable)
+        system_content = "You are a helpful AI assistant with access to specialized tools. Use them when appropriate to provide accurate and comprehensive responses."
+        if self.available_tools:
+            tool_names = [tool['function']['name'] for tool in self.available_tools]
+            system_content += f"\n\nAvailable tools: {', '.join(tool_names)}"
+        
+        messages = [
+            ChatMessage(role='system', content=system_content),
+            ChatMessage(role='user', content=query)
+        ]
+        
         response = await self.llm_adapter.chat_completion(
             messages=messages,
             tools=self.available_tools,
@@ -60,11 +73,14 @@ class MCP_ChatBot:
                     # Call tool through MCP session
                     result = await self.session.call_tool(tool_name, arguments=tool_args)
                     
-                    messages.append(ChatMessage(
+                    # Create tool result message (potentially cacheable for large results)
+                    tool_result = ChatMessage(
                         role="tool", 
                         tool_call_id=tool_id,
                         content=str(result.content)
-                    ))
+                    )
+                    
+                    messages.append(tool_result)
                 
                 response = await self.llm_adapter.chat_completion(
                     messages=messages,
@@ -81,6 +97,10 @@ class MCP_ChatBot:
         print(f"\nMCP Chatbot Started!")
         print(f"Provider: {self.llm_adapter.provider_name}")
         print(f"Model: {self.llm_adapter.model}")
+        print(f"Caching: {'Enabled' if self.llm_adapter.enable_caching else 'Disabled'}")
+        if self.llm_adapter.enable_caching:
+            cache_type = "Automatic" if not self.llm_adapter.requires_manual_cache_control else "Manual (cache_control)"
+            print(f"Cache Type: {cache_type}")
         print("Type your queries or 'quit' to exit.")
         
         while True:
@@ -129,14 +149,21 @@ class MCP_ChatBot:
 
 async def main():
     # You can customize the LLM here
-    from .llm_factory import LLMFactory, LLM_CONFIGS
+    from llm_factory import LLMFactory, LLM_CONFIGS
     
-    # Option 1: Use predefined config
-    config = LLM_CONFIGS.get("gpt4o-mini", LLM_CONFIGS["gpt4o-mini"])
+    # Option 1: Use predefined config with caching enabled
+    config = LLM_CONFIGS["gpt4.1-mini"]  # Directly use gpt-4.1-mini
     llm_adapter = LLMFactory.create_adapter(**config)
     
-    # Option 2: Create custom adapter
-    # llm_adapter = LLMFactory.create_adapter("openrouter", "anthropic/claude-3-sonnet")
+    print(f"Debug: Selected model = {config['model']}")  # Debug line
+    
+    # Option 2: Create custom adapter with caching
+    # llm_adapter = LLMFactory.create_adapter(
+    #     "openrouter", 
+    #     "anthropic/claude-3-sonnet",
+    #     enable_caching=True,
+    #     cache_system_messages=True
+    # )
     
     chatbot = MCP_ChatBot(llm_adapter=llm_adapter)
     await chatbot.connect_to_server_and_run()

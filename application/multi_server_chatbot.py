@@ -1,12 +1,16 @@
 from dotenv import load_dotenv
-import openai
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from typing import List, Dict, TypedDict
+from typing import List, Dict, TypedDict, Optional
 from contextlib import AsyncExitStack
 import json
 import asyncio
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from llm_adapter import LLMAdapter, ChatMessage
+from llm_factory import LLMFactory, LLM_CONFIGS
 
 load_dotenv()
 
@@ -17,20 +21,22 @@ class ToolDefinition(TypedDict):
 
 class MCP_ChatBot:
 
-    def __init__(self):
+    def __init__(self, llm_adapter: Optional[LLMAdapter] = None):
         # Initialize session and client objects
         self.sessions: List[ClientSession] = []
         self.exit_stack = AsyncExitStack()
-        # Configure OpenAI client for OpenRouter
-        self.client = openai.OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
-        )
-        self.model = "openai/gpt-4o-mini"
+        
+        # Use provided adapter or default to OpenRouter with gpt-4.1-mini
+        if llm_adapter:
+            self.llm_adapter = llm_adapter
+        else:
+            config = LLM_CONFIGS["gpt4.1-mini"]
+            self.llm_adapter = LLMFactory.create_adapter(**config)
+            
         self.available_tools: List[ToolDefinition] = []
         self.tool_to_session: Dict[str, ClientSession] = {}
         # Multi-turn conversation state
-        self.conversation_history: List[dict] = []
+        self.conversation_history: List[ChatMessage] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
 
@@ -104,40 +110,38 @@ class MCP_ChatBot:
 
     async def process_query(self, query):
         # Add user message to conversation history
-        self.conversation_history.append({'role': 'user', 'content': query})
+        self.conversation_history.append(ChatMessage(role='user', content=query))
         
         # Use full conversation history for context
         messages = self.conversation_history.copy()
-        response = self.client.chat.completions.create(
-            model=self.model,
+        response = await self.llm_adapter.chat_completion(
             messages=messages,
             tools=self.available_tools,
             max_tokens=2024
         )
         
         # Track token usage
-        if hasattr(response, 'usage') and response.usage:
-            self.print_token_usage(response.usage.prompt_tokens, response.usage.completion_tokens)
+        if response.usage:
+            self.print_token_usage(response.usage.get('prompt_tokens', 0), response.usage.get('completion_tokens', 0))
         
         assistant_response_content = None
         process_query = True
         while process_query:
-            assistant_message = response.choices[0].message
             
-            if assistant_message.content:
-                print(assistant_message.content)
-                assistant_response_content = assistant_message.content
-                if not assistant_message.tool_calls:
+            if response.content:
+                print(response.content)
+                assistant_response_content = response.content
+                if not response.tool_calls:
                     process_query = False
             
-            if assistant_message.tool_calls:
-                messages.append({
-                    'role': 'assistant',
-                    'content': assistant_message.content,
-                    'tool_calls': assistant_message.tool_calls
-                })
+            if response.tool_calls:
+                messages.append(ChatMessage(
+                    role='assistant',
+                    content=response.content,
+                    tool_calls=response.tool_calls
+                ))
                 
-                for tool_call in assistant_message.tool_calls:
+                for tool_call in response.tool_calls:
                     tool_name = tool_call.function.name
                     tool_args = json.loads(tool_call.function.arguments)
                     tool_id = tool_call.id
@@ -148,35 +152,37 @@ class MCP_ChatBot:
                     session = self.tool_to_session[tool_name]
                     result = await session.call_tool(tool_name, arguments=tool_args)
                     
-                    messages.append({
-                        "role": "tool", 
-                        "tool_call_id": tool_id,
-                        "content": str(result.content)
-                    })
+                    messages.append(ChatMessage(
+                        role="tool", 
+                        tool_call_id=tool_id,
+                        content=str(result.content)
+                    ))
                 
-                response = self.client.chat.completions.create(
-                    model=self.model,
+                response = await self.llm_adapter.chat_completion(
                     messages=messages,
                     tools=self.available_tools,
                     max_tokens=2024
                 )
                 
                 # Track token usage for follow-up calls
-                if hasattr(response, 'usage') and response.usage:
-                    self.print_token_usage(response.usage.prompt_tokens, response.usage.completion_tokens)
+                if response.usage:
+                    self.print_token_usage(response.usage.get('prompt_tokens', 0), response.usage.get('completion_tokens', 0))
                 
-                if response.choices[0].message.content and not response.choices[0].message.tool_calls:
-                    assistant_response_content = response.choices[0].message.content
-                    print(response.choices[0].message.content)
+                if response.content and not response.tool_calls:
+                    assistant_response_content = response.content
+                    print(response.content)
                     process_query = False
         
         # Add assistant response to conversation history
         if assistant_response_content:
-            self.conversation_history.append({'role': 'assistant', 'content': assistant_response_content})
+            self.conversation_history.append(ChatMessage(role='assistant', content=assistant_response_content))
 
     async def chat_loop(self):
         """Run an interactive chat loop"""
-        print(f"\n🤖 Multi-Server MCP Chatbot Started! Using model: {self.model}")
+        print(f"\n🤖 Multi-Server MCP Chatbot Started!")
+        print(f"Provider: {self.llm_adapter.provider_name}")
+        print(f"Model: {self.llm_adapter.model}")
+        print(f"Caching: {'Enabled' if self.llm_adapter.enable_caching else 'Disabled'}")
         print("✨ Features: Multi-turn conversation + Token tracking")
         print("\nAvailable capabilities:")
         print("  🔬 Research: ArXiv paper search and analysis")
