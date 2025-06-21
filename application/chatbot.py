@@ -1,12 +1,13 @@
 from dotenv import load_dotenv
-import openai
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from typing import List
+from typing import List, Optional
 import asyncio
 import nest_asyncio
 import os
 import json
+from .llm_adapter import LLMAdapter, ChatMessage
+from .openai_adapter import OpenRouterAdapter
 
 nest_asyncio.apply()
 
@@ -14,43 +15,42 @@ load_dotenv()
 
 class MCP_ChatBot:
 
-    def __init__(self):
+    def __init__(self, llm_adapter: Optional[LLMAdapter] = None, model: str = "openai/gpt-4o-mini"):
         # Initialize session and client objects
         self.session: ClientSession = None
-        # Configure OpenAI client for OpenRouter
-        self.client = openai.OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
-        )
+        
+        # Use provided adapter or default to OpenRouter
+        if llm_adapter:
+            self.llm_adapter = llm_adapter
+        else:
+            self.llm_adapter = OpenRouterAdapter(model=model)
+            
         self.available_tools: List[dict] = []
-        self.model = "openai/gpt-4o-mini"
 
     async def process_query(self, query):
-        messages = [{'role':'user', 'content':query}]
-        response = self.client.chat.completions.create(
-            model=self.model,
+        messages = [ChatMessage(role='user', content=query)]
+        response = await self.llm_adapter.chat_completion(
             messages=messages,
-            tools=self.available_tools,  # tools exposed to the LLM
+            tools=self.available_tools,
             max_tokens=2024
         )
         
         process_query = True
         while process_query:
-            assistant_message = response.choices[0].message
             
-            if assistant_message.content:
-                print(assistant_message.content)
-                if not assistant_message.tool_calls:
+            if response.content:
+                print(response.content)
+                if not response.tool_calls:
                     process_query = False
             
-            if assistant_message.tool_calls:
-                messages.append({
-                    'role': 'assistant',
-                    'content': assistant_message.content,
-                    'tool_calls': assistant_message.tool_calls
-                })
+            if response.tool_calls:
+                messages.append(ChatMessage(
+                    role='assistant',
+                    content=response.content,
+                    tool_calls=response.tool_calls
+                ))
                 
-                for tool_call in assistant_message.tool_calls:
+                for tool_call in response.tool_calls:
                     tool_name = tool_call.function.name
                     tool_args = json.loads(tool_call.function.arguments)
                     tool_id = tool_call.id
@@ -60,26 +60,27 @@ class MCP_ChatBot:
                     # Call tool through MCP session
                     result = await self.session.call_tool(tool_name, arguments=tool_args)
                     
-                    messages.append({
-                        "role": "tool", 
-                        "tool_call_id": tool_id,
-                        "content": str(result.content)
-                    })
+                    messages.append(ChatMessage(
+                        role="tool", 
+                        tool_call_id=tool_id,
+                        content=str(result.content)
+                    ))
                 
-                response = self.client.chat.completions.create(
-                    model=self.model,
+                response = await self.llm_adapter.chat_completion(
                     messages=messages,
                     tools=self.available_tools,
                     max_tokens=2024
                 )
                 
-                if response.choices[0].message.content and not response.choices[0].message.tool_calls:
-                    print(response.choices[0].message.content)
+                if response.content and not response.tool_calls:
+                    print(response.content)
                     process_query = False
 
     async def chat_loop(self):
         """Run an interactive chat loop"""
-        print(f"\nMCP Chatbot Started! Using model: {self.model}")
+        print(f"\nMCP Chatbot Started!")
+        print(f"Provider: {self.llm_adapter.provider_name}")
+        print(f"Model: {self.llm_adapter.model}")
         print("Type your queries or 'quit' to exit.")
         
         while True:
@@ -127,7 +128,17 @@ class MCP_ChatBot:
 
 
 async def main():
-    chatbot = MCP_ChatBot()
+    # You can customize the LLM here
+    from .llm_factory import LLMFactory, LLM_CONFIGS
+    
+    # Option 1: Use predefined config
+    config = LLM_CONFIGS.get("gpt4o-mini", LLM_CONFIGS["gpt4o-mini"])
+    llm_adapter = LLMFactory.create_adapter(**config)
+    
+    # Option 2: Create custom adapter
+    # llm_adapter = LLMFactory.create_adapter("openrouter", "anthropic/claude-3-sonnet")
+    
+    chatbot = MCP_ChatBot(llm_adapter=llm_adapter)
     await chatbot.connect_to_server_and_run()
   
 
