@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 MCP Research Assistant v2.0 🤖</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <!-- Header with retro styling -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <span class="blink">🤖</span> 
+                    MCP RESEARCH ASSISTANT 
+                    <span class="blink">🤖</span>
+                </h1>
+                <div class="subtitle">
+                    <marquee behavior="scroll" direction="left" scrollamount="3">
+                        ✨ Powered by GPT-4.1-mini • ArXiv Search • File Management • Web Fetching • Real-time Chat ✨
+                    </marquee>
+                </div>
+                <div class="status-bar">
+                    <div class="status-item">
+                        <span class="status-label">STATUS:</span>
+                        <span id="connection-status" class="status-value">CONNECTING...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">MODEL:</span>
+                        <span id="model-info" class="status-value">LOADING...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">TOOLS:</span>
+                        <span id="tools-count" class="status-value">0</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main chat area -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <h2>🔬 RESEARCH TERMINAL 🔬</h2>
+                <div class="chat-controls">
+                    <button id="clear-chat" class="retro-button">🧹 CLEAR HISTORY</button>
+                    <button id="toggle-sound" class="retro-button">🔊 SOUND ON</button>
+                </div>
+            </div>
+            
+            <div id="chat-messages" class="chat-messages">
+                <div class="welcome-message">
+                    <div class="message-header">🤖 SYSTEM MESSAGE</div>
+                    <div class="message-content"><strong>Welcome to the MCP Research Assistant!</strong>
+
+🔬 <strong>Available Capabilities:</strong>
+• 📚 <strong>ArXiv Research:</strong> Search and analyze academic papers
+• 📁 <strong>File Management:</strong> Read, write, and organize files
+• 🌐 <strong>Web Fetching:</strong> Retrieve and process web content
+• 💬 <strong>Multi-turn Chat:</strong> Contextual conversations with memory
+
+💡 <strong>Try these commands:</strong>
+• "Search for papers about machine learning"
+• "Create a research summary file"
+• "Fetch content from a website"
+• "Help me organize my research"
+
+<span class="blink">>>> Type your message below to start! <<<</span></div>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="input-header">
+                    <span class="prompt">RESEARCH_QUERY></span>
+                    <span class="cursor blink">_</span>
+                </div>
+                <div class="input-wrapper">
+                    <textarea id="chat-input" 
+                              placeholder="Enter your research query or command..." 
+                              rows="3"
+                              maxlength="2000"></textarea>
+                    <div class="input-actions">
+                        <button id="send-message" class="send-button">
+                            📡 TRANSMIT
+                        </button>
+                        <div class="char-counter">
+                            <span id="char-count">0</span>/2000
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <strong>🚀 MCP Research Assistant v2.0</strong><br>
+                    Built with FastAPI • WebSocket • Pure HTML/CSS/JS
+                </div>
+                <div class="footer-section">
+                    <strong>💾 FEATURES:</strong><br>
+                    Real-time Chat • Multi-server MCP • Prompt Caching
+                </div>
+                <div class="footer-section">
+                    <strong>🎨 RETRO STYLE:</strong><br>
+                    <span class="blink">Web 1.0 Nostalgia</span> • Terminal Vibes
+                </div>
+            </div>
+            <div class="visitor-counter">
+                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="1" height="1" alt="">
+                Visitor #<span class="blink">001337</span> • Last updated: <span id="last-updated"></span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
